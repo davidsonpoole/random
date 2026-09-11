@@ -1,41 +1,64 @@
+#include <mutex>
+#include <thread>
 #include <vector>
 #include <iostream>
 
-void generatePermutationsH(std::vector<int>& nums, std::vector<int>& indices) {
-    if (indices.size() == nums.size()) {
-        std::cout << "Printing: ";
-        for (auto i : indices) {
-            std::cout << nums[i];
-        }
-        std::cout << std::endl;
-        return;
-    }
-    for (int i=0; i<nums.size(); i++) {
-        if (std::find(indices.begin(), indices.end(), i) != indices.end()) continue;
-        indices.push_back(i);
-        generatePermutationsH(nums, indices);
-        indices.pop_back();
+#define NUM_THREADS 8
+
+std::atomic<int> running{NUM_THREADS};
+std::mutex logLock;
+
+inline void swap(std::vector<int>& v, int i, int j) {
+    int temp = v[i];
+    v[i] = v[j];
+    v[j] = temp;
+}
+
+void unrank(std::vector<int>& v, int n, int r) {
+    if (n > 0) {
+        swap(v, n-1, r % n);
+        unrank(v, n-1, r/n);
     }
 }
 
-void generatePermutations(std::vector<int>& nums) {
+void thread_fn(const std::vector<int>& initial, int n, int start, int end) {
 
-    std::vector<int> indices;
-    generatePermutationsH(nums, indices);
+    std::cout << "Launched thread" << std::endl;
+
+    for (int i=start; i<end; i++) {
+        auto v = initial;
+        unrank(v, n, i);
+        std::lock_guard<std::mutex> lock(logLock);
+        for (auto i : v) {
+            std::cout << i;
+        }
+        std::cout << std::endl;
+    }
+    running.fetch_sub(1);
 }
 
 int main() {
 
-    long num;
+    const int n = 10;
 
-    std::cin >> num;
+    long n_permutations = n;
+    for (int i=1; i<n; i++) {
+        n_permutations *= n-i;
+    }
+    std::cout << "Num permutations: " << n_permutations << std::endl;
 
-    std::string s = std::to_string(num);
-    std::vector<int> nums;
-    for (auto c : s) {
-        nums.push_back(static_cast<int>(c - '0'));
+    std::vector<int> initial;
+    for (int i=0; i<n; i++) {
+        initial.push_back(i);
     }
 
-    generatePermutations(nums);
+    for (int i=0; i<NUM_THREADS; i++) {
+        int startRange = n_permutations/NUM_THREADS * i;
+        int endRange = n_permutations/NUM_THREADS * (i+1);
+        std::cout << "Spawning thread with range [" << startRange << "," << endRange << ")" << std::endl;
+        std::thread t0{thread_fn, initial, n, startRange, endRange};
+        t0.detach();
+    }
 
+    while (running.load() != 0);
 }
