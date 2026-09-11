@@ -1,0 +1,5 @@
+# Ignore build output: compiled binaries have no extension (e.g. permutations.cpp -> permutations)
+*
+!*.*
+!*/
+!.gitignore
