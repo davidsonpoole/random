@@ -5,7 +5,6 @@
 
 #define NUM_THREADS 8
 
-std::atomic<int> running{NUM_THREADS};
 std::mutex logLock;
 
 inline void swap(std::vector<int>& v, int i, int j) {
@@ -25,16 +24,35 @@ void thread_fn(const std::vector<int>& initial, int n, int start, int end) {
 
     std::cout << "Launched thread" << std::endl;
 
+    std::vector<char> buf(1024*1024);
+    int offset = 0;
+
     for (int i=start; i<end; i++) {
         auto v = initial;
         unrank(v, n, i);
-        std::lock_guard<std::mutex> lock(logLock);
+
+        if (offset + v.size() + 1 > buf.size()) {
+            std::cout << "Flushing because v is " << v.size() << " and buf is " << buf.size() << std::endl;
+            // flush buf
+            std::lock_guard<std::mutex> lock(logLock);
+            for (auto i=0; i<offset; i++) {
+                std::cout << buf[i];
+            }
+            offset=0;
+        } 
+
         for (auto i : v) {
-            std::cout << i;
+            buf[offset++] = '0' + i;
         }
-        std::cout << std::endl;
+        buf[offset++] = '\n';
     }
-    running.fetch_sub(1);
+
+    std::cout << "Last flush" << std::endl;
+    std::lock_guard<std::mutex> lock(logLock);
+    for (auto i=0; i<offset; i++) {
+        std::cout << buf[i];
+    }
+    offset=0;
 }
 
 int main() {
@@ -52,13 +70,15 @@ int main() {
         initial.push_back(i);
     }
 
+    std::vector<std::thread> threads;
     for (int i=0; i<NUM_THREADS; i++) {
         int startRange = n_permutations/NUM_THREADS * i;
         int endRange = n_permutations/NUM_THREADS * (i+1);
         std::cout << "Spawning thread with range [" << startRange << "," << endRange << ")" << std::endl;
-        std::thread t0{thread_fn, initial, n, startRange, endRange};
-        t0.detach();
+        threads.emplace_back(thread_fn, initial, n, startRange, endRange);
     }
 
-    while (running.load() != 0);
+    for (auto& t : threads) {
+        t.join();
+    }
 }
