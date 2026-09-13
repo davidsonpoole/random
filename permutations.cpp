@@ -3,7 +3,7 @@
 #include <vector>
 #include <iostream>
 
-#define NUM_THREADS 8
+#define NUM_THREADS 4
 
 std::mutex logLock;
 
@@ -72,8 +72,8 @@ int main() {
 
     std::vector<std::thread> threads;
     for (int i=0; i<NUM_THREADS; i++) {
-        int startRange = n_permutations/NUM_THREADS * i;
-        int endRange = n_permutations/NUM_THREADS * (i+1);
+        long startRange = n_permutations/NUM_THREADS * i;
+        long endRange = i < NUM_THREADS-1 ? n_permutations/NUM_THREADS * (i+1) : n_permutations;
         std::cout << "Spawning thread with range [" << startRange << "," << endRange << ")" << std::endl;
         threads.emplace_back(thread_fn, initial, n, startRange, endRange);
     }
