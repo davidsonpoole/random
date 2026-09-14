@@ -2,10 +2,12 @@
 #include <thread>
 #include <vector>
 #include <iostream>
+#include <fstream>
 
 #define NUM_THREADS 4
 
 std::mutex logLock;
+std::ofstream fileStream;
 
 inline void swap(std::vector<int>& v, int i, int j) {
     int temp = v[i];
@@ -32,13 +34,10 @@ void thread_fn(const std::vector<int>& initial, int n, int start, int end) {
         unrank(v, n, i);
 
         if (offset + v.size() + 1 > buf.size()) {
-            std::cout << "Flushing because v is " << v.size() << " and buf is " << buf.size() << std::endl;
             // flush buf
             std::lock_guard<std::mutex> lock(logLock);
-            for (auto i=0; i<offset; i++) {
-                std::cout << buf[i];
-            }
-            offset=0;
+            fileStream.write(buf.data(), offset);
+            offset = 0;
         } 
 
         for (auto i : v) {
@@ -47,11 +46,8 @@ void thread_fn(const std::vector<int>& initial, int n, int start, int end) {
         buf[offset++] = '\n';
     }
 
-    std::cout << "Last flush" << std::endl;
     std::lock_guard<std::mutex> lock(logLock);
-    for (auto i=0; i<offset; i++) {
-        std::cout << buf[i];
-    }
+    fileStream.write(buf.data(), offset);
     offset=0;
 }
 
@@ -64,6 +60,7 @@ int main() {
         n_permutations *= n-i;
     }
     std::cout << "Num permutations: " << n_permutations << std::endl;
+    fileStream.open("newfile.txt");
 
     std::vector<int> initial;
     for (int i=0; i<n; i++) {
@@ -74,7 +71,6 @@ int main() {
     for (int i=0; i<NUM_THREADS; i++) {
         long startRange = n_permutations/NUM_THREADS * i;
         long endRange = i < NUM_THREADS-1 ? n_permutations/NUM_THREADS * (i+1) : n_permutations;
-        std::cout << "Spawning thread with range [" << startRange << "," << endRange << ")" << std::endl;
         threads.emplace_back(thread_fn, initial, n, startRange, endRange);
     }
 
