@@ -3,10 +3,12 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <string>
 
 #define NUM_THREADS 4
 
 std::ofstream fileStream;
+std::mutex ioMutex;
 
 inline void swap(std::vector<int>& v, int i, int j) {
     int temp = v[i];
@@ -21,9 +23,12 @@ void unrank(std::vector<int>& v, int n, int r) {
     }
 }
 
-void thread_fn(const std::vector<int>& initial, int n, int start, int end) {
+void thread_fn(const std::vector<int>& initial, const std::string& a, int n, int start, int end) {
 
-    std::cout << "Launched thread" << std::endl;
+    {
+        std::lock_guard<std::mutex> lock(ioMutex);
+        std::cout << "Launched thread" << std::endl;
+    }
 
     std::vector<char> buf(1024*1024);
     int offset = 0;
@@ -34,23 +39,33 @@ void thread_fn(const std::vector<int>& initial, int n, int start, int end) {
 
         if (offset + v.size() + 1 > buf.size()) {
             // flush buf
-            fileStream.write(buf.data(), offset);
+            {
+                std::lock_guard<std::mutex> lock(ioMutex);
+                fileStream.write(buf.data(), offset);
+            }
             offset = 0;
-        } 
+        }
 
         for (auto i : v) {
-            buf[offset++] = '0' + i;
+            buf[offset++] = a[i];
         }
         buf[offset++] = '\n';
     }
 
-    fileStream.write(buf.data(), offset);
+    {
+        std::lock_guard<std::mutex> lock(ioMutex);
+        fileStream.write(buf.data(), offset);
+    }
     offset=0;
 }
 
 int main() {
 
-    const int n = 10;
+    std::string a;
+
+    std::cin >> a;
+
+    const int n = a.length();
 
     long n_permutations = n;
     for (int i=1; i<n; i++) {
@@ -68,7 +83,7 @@ int main() {
     for (int i=0; i<NUM_THREADS; i++) {
         long startRange = n_permutations/NUM_THREADS * i;
         long endRange = i < NUM_THREADS-1 ? n_permutations/NUM_THREADS * (i+1) : n_permutations;
-        threads.emplace_back(thread_fn, initial, n, startRange, endRange);
+        threads.emplace_back(thread_fn, initial, a, n, startRange, endRange);
     }
 
     for (auto& t : threads) {
