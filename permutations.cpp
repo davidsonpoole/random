@@ -6,7 +6,6 @@
 
 #define NUM_THREADS 4
 
-std::mutex logLock;
 std::ofstream fileStream;
 
 inline void swap(std::vector<int>& v, int i, int j) {
@@ -35,7 +34,6 @@ void thread_fn(const std::vector<int>& initial, int n, int start, int end) {
 
         if (offset + v.size() + 1 > buf.size()) {
             // flush buf
-            std::lock_guard<std::mutex> lock(logLock);
             fileStream.write(buf.data(), offset);
             offset = 0;
         } 
@@ -46,7 +44,6 @@ void thread_fn(const std::vector<int>& initial, int n, int start, int end) {
         buf[offset++] = '\n';
     }
 
-    std::lock_guard<std::mutex> lock(logLock);
     fileStream.write(buf.data(), offset);
     offset=0;
 }
