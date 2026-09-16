@@ -1,14 +1,13 @@
-#include <mutex>
+#include <chrono>
 #include <thread>
 #include <vector>
 #include <iostream>
 #include <fstream>
 #include <string>
 
-#define NUM_THREADS 4
+#define NUM_THREADS 8
 
 std::ofstream fileStream;
-std::mutex ioMutex;
 
 inline void swap(std::vector<int>& v, int i, int j) {
     int temp = v[i];
@@ -25,11 +24,6 @@ void unrank(std::vector<int>& v, int n, int r) {
 
 void thread_fn(const std::vector<int>& initial, const std::string& a, int n, int start, int end) {
 
-    {
-        std::lock_guard<std::mutex> lock(ioMutex);
-        std::cout << "Launched thread" << std::endl;
-    }
-
     std::vector<char> buf(1024*1024);
     int offset = 0;
 
@@ -39,10 +33,7 @@ void thread_fn(const std::vector<int>& initial, const std::string& a, int n, int
 
         if (offset + v.size() + 1 > buf.size()) {
             // flush buf
-            {
-                std::lock_guard<std::mutex> lock(ioMutex);
-                fileStream.write(buf.data(), offset);
-            }
+            fileStream.write(buf.data(), offset);
             offset = 0;
         }
 
@@ -52,41 +43,61 @@ void thread_fn(const std::vector<int>& initial, const std::string& a, int n, int
         buf[offset++] = '\n';
     }
 
-    {
-        std::lock_guard<std::mutex> lock(ioMutex);
-        fileStream.write(buf.data(), offset);
-    }
+    fileStream.write(buf.data(), offset);
     offset=0;
 }
 
 int main() {
 
-    std::string a;
+    std::vector<std::string> strings = {
+        "a",
+        "ab",
+        "abc",
+        "abcd",
+        "abcde",
+        "abcdef",
+        "abcdefg",
+        "abcdefgh",
+        "abcdefghi",
+        "abcdefghij",
+        "abcdefghijk",
+        "abcdefghijkl",
+    };
 
-    std::cin >> a;
+    for (auto& a : strings) {
 
-    const int n = a.length();
+        std::cout << "Permutating " << a << std::endl;
 
-    long n_permutations = n;
-    for (int i=1; i<n; i++) {
-        n_permutations *= n-i;
-    }
-    std::cout << "Num permutations: " << n_permutations << std::endl;
-    fileStream.open("newfile.txt");
+        const int n = a.length();
 
-    std::vector<int> initial;
-    for (int i=0; i<n; i++) {
-        initial.push_back(i);
-    }
+        long n_permutations = n;
+        for (int i=1; i<n; i++) {
+            n_permutations *= n-i;
+        }
+        std::cout << "Num permutations: " << n_permutations << std::endl;
+        fileStream.open(a + "_permutations.txt");
 
-    std::vector<std::thread> threads;
-    for (int i=0; i<NUM_THREADS; i++) {
-        long startRange = n_permutations/NUM_THREADS * i;
-        long endRange = i < NUM_THREADS-1 ? n_permutations/NUM_THREADS * (i+1) : n_permutations;
-        threads.emplace_back(thread_fn, initial, a, n, startRange, endRange);
-    }
+        std::vector<int> initial;
+        for (int i=0; i<n; i++) {
+            initial.push_back(i);
+        }
 
-    for (auto& t : threads) {
-        t.join();
+        auto start = std::chrono::steady_clock::now();
+
+        std::vector<std::thread> threads;
+        for (int i=0; i<NUM_THREADS; i++) {
+            long startRange = n_permutations/NUM_THREADS * i;
+            long endRange = i < NUM_THREADS-1 ? n_permutations/NUM_THREADS * (i+1) : n_permutations;
+            threads.emplace_back(thread_fn, initial, a, n, startRange, endRange);
+        }
+
+        for (auto& t : threads) {
+            t.join();
+        }
+        auto end = std::chrono::steady_clock::now();
+        auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
+        std::cout << ns.count() << " ns\n";
+        
     }
 }
